@@ -105,7 +105,7 @@ on:
         description: 'Kernel Branch (required when kernel_source=custom_build)'
         type: string
         required: false
-        default: 'sheng-7.2.2'
+        default: 'sheng-7.2.6'
 
       kernel_config:
         description: 'Kernel Config (required when kernel_source=custom_build)'
@@ -1208,9 +1208,24 @@ jobs:
       - name: "Configure fstab"
         run: |
           PARTITION="${{ steps.partition.outputs.label }}"
-          echo "PARTLABEL=$PARTITION / ext4 defaults 0 1" | \
+          echo "PARTLABEL=$PARTITION / ext4 defaults,x-systemd.growfs 0 1" | \
             sudo tee "$ROOTFS_MOUNT/etc/fstab"
+          echo "PARTLABEL=persist /mnt/sheng-persist ext4 ro,noload,nosuid,nodev,noexec,nofail,x-systemd.device-timeout=10s 0 0" | \
+            sudo tee -a "$ROOTFS_MOUNT/etc/fstab"
           echo "✓ fstab configured: root=PARTLABEL=$PARTITION"
+
+      - name: "Configure WLAN MAC"
+        run: |
+          sudo mkdir -p "$ROOTFS_MOUNT/mnt/sheng-persist" \
+            "$ROOTFS_MOUNT/usr/lib/firmware/ath12k/WCN7850/hw2.0"
+          sudo ln -s /mnt/sheng-persist/kiwi_v2/wlan_mac.bin \
+            "$ROOTFS_MOUNT/usr/lib/firmware/ath12k/WCN7850/hw2.0/wlan_mac.bin"
+          sudo install -D -m 0644 patches/sheng-wlan.conf \
+            "$ROOTFS_MOUNT/etc/modprobe.d/sheng-wlan.conf"
+          sudo install -D -m 0644 patches/sheng-wlan.service \
+            "$ROOTFS_MOUNT/usr/lib/systemd/system/sheng-wlan.service"
+          sudo chroot "$ROOTFS_MOUNT" systemctl enable sheng-wlan.service
+          echo "✓ WLAN MAC configured"
 
       - name: "Clean APT Cache"
         run: |
